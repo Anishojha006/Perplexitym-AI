@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { registerUser } from '../controller/auth.controller.js';
+import { registerUser , emailVerification } from '../controller/auth.controller.js';
 import { registerValidation } from '../validators/auth.validator.js';
 
 const authRouter = Router();
@@ -13,4 +13,12 @@ const authRouter = Router();
 
 authRouter.post('/register', registerValidation, registerUser);
 
+/**
+ * @route GET api/auth/verify-email
+ * @description Verify user's email.
+ * @access Public
+ * @query {token}.
+ */
+
+authRouter.get('/verify-email/:token',emailVerification);
 export default authRouter;

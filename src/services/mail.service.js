@@ -20,14 +20,29 @@ transporter.verify((error, success) => {
   }
 });
 
-export const sendEmail = async ({ to, subject, text, html }) => {
+export const sendEmail = async (optionsOrTo, subject, text, html) => {
+  const mailOptions = typeof optionsOrTo === 'object' && optionsOrTo !== null
+    ? optionsOrTo
+    : {
+        to: optionsOrTo,
+        subject,
+        text,
+        html,
+      };
+
+  const { to, subject: mailSubject, text: mailText, html: mailHtml } = mailOptions;
+
+  if (!to || !String(to).trim()) {
+    throw new Error('No recipients defined');
+  }
+
   try {
     const info = await transporter.sendMail({
       from: process.env.GOOGLE_USER,
       to,
-      subject,
-      text,
-      html,
+      subject: mailSubject,
+      text: mailText,
+      html: mailHtml,
     });
 
     console.log('Message sent: %s', info.messageId);

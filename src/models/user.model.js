@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       trim: true,
+      unique: true,
     },
     email: {
       type: String,
@@ -39,6 +40,16 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google", "github"],
       default: "local",
     },
+    emailVerificationToken: {
+      type: String,
+      default: null
+    },
+
+    emailVerificationExpires: {
+      type: Date,
+      default: null
+    }
+    ,
     preferences: {
       theme: {
         type: String,
@@ -49,6 +60,7 @@ const userSchema = new mongoose.Schema(
         type: String,
         default: "en",
       },
+
     },
   },
   {
@@ -56,10 +68,11 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+
   this.password = await bcrypt.hash(this.password, 10);
-})
+});
 
 
 const userModel = mongoose.model("User", userSchema);
