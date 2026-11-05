@@ -407,6 +407,22 @@ export async function loginUser(req, res) {
       });
     }
 
+    const token = jwt.sign({
+      id: isuserExist._id,
+      email: isuserExist.email,
+    },
+      process.env.JWT_SECRET, {
+      expiresIn: "7d"
+    }
+    )
+
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     res.status(200).json({
       message: 'Login successful',
       success: true,
@@ -428,4 +444,13 @@ export async function loginUser(req, res) {
       error: error.message
     });
   }
+}
+
+export async function getmeController(req, res) {
+
+  res.status(200).json({
+    message: "User found",
+    success: true,
+    user: req.user
+  });
 }
