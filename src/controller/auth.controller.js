@@ -376,3 +376,56 @@ export async function emailVerification(req, res) {
 `);
 
 }
+
+export async function loginUser(req, res) {
+  const { email, password } = req.body;
+  try {
+    const isuserExist = await userModel.findOne({ email: email }).select("+password");
+
+    if (!isuserExist) {
+      return res.status(404).json({
+        message: 'User not found',
+        success: false,
+        error: 'User not found',
+      });
+    }
+
+    if (!isuserExist.isVerified) {
+      return res.status(401).json({
+        message: 'Email not verified',
+        success: false,
+        error: 'Email not verified',
+      });
+    }
+
+    const isPasswordMatch = await isuserExist.comparePassword(password);
+    if (!isPasswordMatch) {
+      return res.status(401).json({
+        message: 'Invalid credentials',
+        success: false,
+        error: 'Invalid credentials',
+      });
+    }
+
+    res.status(200).json({
+      message: 'Login successful',
+      success: true,
+      user: {
+        id: isuserExist._id,
+        username: isuserExist.username,
+        email: isuserExist.email,
+        isverified: isuserExist.isVerified,
+      },
+    })
+
+  }
+  catch (error) {
+    console.log("Login error", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error. Login failed.",
+      error: error.message
+    });
+  }
+}
