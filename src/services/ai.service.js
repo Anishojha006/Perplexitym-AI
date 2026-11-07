@@ -1,18 +1,27 @@
-import { initChatModel } from 'langchain';
+import { ChatGroq } from '@langchain/groq';
 
-async function getModel() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error('ANTHROPIC_API_KEY is missing. Add it to your .env file.');
+let model;
+
+function getModel() {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY is missing. Add it to your .env file.');
   }
 
-  return await initChatModel('claude-sonnet-4-6');
+  if (!model) {
+    model = new ChatGroq({
+      apiKey: process.env.GROQ_API_KEY,
+      model: 'openai/gpt-oss-120b',
+      temperature: 0,
+    });
+  }
+
+  return model;
 }
 
 export async function testAI() {
   try {
-    const model = await getModel();
-    const response = await model.invoke(
-      'Tell me about the benefits of the caste system in Hinduism in ancient India'
+    const response = await getModel().invoke(
+      "write an HTML code form an form"
     );
 
     const text =
