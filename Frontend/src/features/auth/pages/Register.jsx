@@ -1,12 +1,23 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '../hooks/useAuth.js';
+import { Navigate } from 'react-router';
+import { useSelector } from 'react-redux';
 
 export default function Register() {
   const [form, setForm] = useState({ username: '', email: '', password: '' })
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+
+  const user = useSelector(state => state.auth.user);
+  const loading = useSelector(state => state.auth.loading);
   const { handleregister } = useAuth();
+
+  if (!loading && user) {
+
+    return <Navigate to="/" replace />
+  }
+
 
   function handleChange(event) {
     setForm({ ...form, [event.target.name]: event.target.value })
