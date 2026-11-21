@@ -1,6 +1,10 @@
 import userModel from '../models/user.model.js';
 import { sendEmail } from '../services/mail.service.js';
 import jwt from 'jsonwebtoken';
+import { createHash } from 'node:crypto';
+
+const hashVerificationToken = (token) =>
+  createHash('sha256').update(token).digest('hex');
 
 export async function registerUser(req, res) {
   const { username, email, password } = req.body;
@@ -16,11 +20,65 @@ export async function registerUser(req, res) {
       });
     }
 
-    const isUserAlreadyExist = await userModel.findOne({
-      $or: [{ username }, { email: normalizedEmail }],
+    await userModel.deleteMany({
+      provider: 'local',
+      isVerified: false,
+      createdAt: { $lte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
     });
 
+    const isUserAlreadyExist = await userModel.findOne({
+      $or: [{ username }, { email: normalizedEmail }],
+    }).select('+password');
+
     if (isUserAlreadyExist) {
+      if (
+        isUserAlreadyExist.username === username &&
+        isUserAlreadyExist.email === normalizedEmail &&
+        !isUserAlreadyExist.isVerified &&
+        await isUserAlreadyExist.comparePassword(password)
+      ) {
+        const cooldownMs = 25 * 60 * 1000;
+        const lastSentAt = isUserAlreadyExist.verificationEmailSentAt?.getTime();
+        if (
+          isUserAlreadyExist.verificationResendCount > 0 &&
+          lastSentAt &&
+          Date.now() - lastSentAt < cooldownMs
+        ) {
+          const retryAfterMinutes = Math.ceil((cooldownMs - (Date.now() - lastSentAt)) / 60000);
+          return res.status(429).json({
+            message: `Please wait ${retryAfterMinutes} minute(s) before requesting another verification email.`,
+            success: false,
+          });
+        }
+
+        const verificationToken = jwt.sign(
+          { email: normalizedEmail },
+          process.env.JWT_SECRET,
+          { expiresIn: '24h' }
+        );
+        const verificationUrl = `http://localhost:3000/api/auth/verify-email/${verificationToken}`;
+
+        isUserAlreadyExist.unverifiedExpiresAt ??= new Date(
+          isUserAlreadyExist.createdAt.getTime() + 7 * 24 * 60 * 60 * 1000
+        );
+        isUserAlreadyExist.emailVerificationToken = hashVerificationToken(verificationToken);
+        isUserAlreadyExist.emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await isUserAlreadyExist.save();
+        await sendEmail({
+          to: normalizedEmail,
+          subject: 'Your new email verification link',
+          text: `Your previous verification link expired. Verify your email using this link: ${verificationUrl}`,
+        });
+        isUserAlreadyExist.verificationEmailSentAt = new Date();
+        isUserAlreadyExist.verificationResendCount += 1;
+        await isUserAlreadyExist.save();
+
+        return res.status(200).json({
+          message: 'A new verification link has been sent to your email.',
+          success: true,
+        });
+      }
+
       return res.status(409).json({
         message: 'User already exists',
         success: false,
@@ -28,15 +86,18 @@ export async function registerUser(req, res) {
       });
     }
 
-    const verificationToken = jwt.sign({ email: normalizedEmail }, process.env.JWT_SECRET, { expiresIn: '15m' });
+    const verificationToken = jwt.sign({ email: normalizedEmail }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
     const user = await userModel.create({
       username,
       email: normalizedEmail,
       password,
-      isEmailVerified: false,
-      // emailVerificationToken: hashedToken,
-      emailVerificationExpires: new Date(Date.now() + 15 * 60 * 1000),
+      isVerified: false,
+      emailVerificationToken: hashVerificationToken(verificationToken),
+      emailVerificationExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      unverifiedExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      verificationEmailSentAt: new Date(),
+      verificationResendCount: 0,
     });
 
 
@@ -224,7 +285,7 @@ export async function registerUser(req, res) {
         id: user._id,
         username: user.username,
         email: user.email,
-        isverified: user.isEmailVerified,
+        isverified: user.isVerified,
       },
     });
   } catch (error) {
@@ -238,13 +299,47 @@ export async function registerUser(req, res) {
 
 export async function emailVerification(req, res) {
   const { token } = req.params;
-  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(410).send(`
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Verification link expired</title>
+          </head>
+          <body style="font-family: Arial, sans-serif; max-width: 560px; margin: 80px auto; padding: 24px; color: #222;">
+            <h1>Verification link expired</h1>
+            <p>To get a new link, return to registration and submit the same email, username, and password.</p>
+            <p><a href="http://localhost:5173/register">Return to registration</a></p>
+          </body>
+        </html>
+      `);
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: 'This verification link is invalid.',
+    });
+  }
+
   const user = await userModel.findOne({ email: decoded.email });
   if (!user) {
     return res.status(404).json({
       message: 'User not found',
       success: false,
       error: 'User not found',
+    });
+  }
+
+  if (user.emailVerificationToken !== hashVerificationToken(token)) {
+    return res.status(410).json({
+      success: false,
+      message: 'This verification link has been replaced. Use the latest link sent to your email.',
     });
   }
 
@@ -257,6 +352,7 @@ export async function emailVerification(req, res) {
   user.isVerified = true;
   user.emailVerificationToken = null;
   user.emailVerificationExpires = null;
+  user.unverifiedExpiresAt = null;
   await user.save();
 
 
@@ -378,9 +474,12 @@ export async function emailVerification(req, res) {
 }
 
 export async function loginUser(req, res) {
-  const { email, password } = req.body;
+  const { identifier: submittedIdentifier, email, password } = req.body;
   try {
-    const isuserExist = await userModel.findOne({ email: email }).select("+password");
+    const identifier = String(submittedIdentifier ?? email ?? '').trim();
+    const isuserExist = await userModel.findOne({
+      $or: [{ email: identifier.toLowerCase() }, { username: identifier }],
+    }).select("+password");
 
     if (!isuserExist) {
       return res.status(404).json({
@@ -418,7 +517,7 @@ export async function loginUser(req, res) {
 
     res.cookie('token', token, {
       httpOnly: true,
-      secure: 'production',
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });

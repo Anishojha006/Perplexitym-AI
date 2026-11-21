@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { registerUser, emailVerification, loginUser, getmeController } from '../controller/auth.controller.js';
-import { registerValidation, loginValidation } from '../validators/auth.validator.js';
+import { registerValidation } from '../validators/auth.validator.js';
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 
 const authRouter = Router();
@@ -18,10 +18,10 @@ authRouter.post('/register', registerValidation, registerUser);
  * @route GET api/auth/verify-email
  * @description Verify user's email.
  * @access Public
- * @query {token}.
+ * @param {token}.
  */
 
-authRouter.get('/verify-email/:token', loginValidation, emailVerification);
+authRouter.get('/verify-email/:token', emailVerification);
 
 /**
  * @route GET api/auth/get-me

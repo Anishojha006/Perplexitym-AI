@@ -48,8 +48,19 @@ const userSchema = new mongoose.Schema(
     emailVerificationExpires: {
       type: Date,
       default: null
-    }
-    ,
+    },
+    unverifiedExpiresAt: {
+      type: Date,
+      default: null,
+    },
+    verificationEmailSentAt: {
+      type: Date,
+      default: null,
+    },
+    verificationResendCount: {
+      type: Number,
+      default: 0,
+    },
     preferences: {
       theme: {
         type: String,
@@ -67,6 +78,8 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+userSchema.index({ unverifiedExpiresAt: 1 }, { expireAfterSeconds: 0 });
 
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;

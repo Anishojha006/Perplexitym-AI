@@ -1,27 +1,47 @@
-import { useState } from 'react'
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { useAuth } from '../hooks/useAuth.js';
 
 export default function Register() {
   const [form, setForm] = useState({ username: '', email: '', password: '' })
+  const [formError, setFormError] = useState('');
+  const [formSuccess, setFormSuccess] = useState('');
+  const { handleregister } = useAuth();
 
   function handleChange(event) {
     setForm({ ...form, [event.target.name]: event.target.value })
+    setFormError('');
+    setFormSuccess('');
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
-    console.log('Registration submitted:', form)
+    setFormError('');
+    setFormSuccess('');
+    try {
+      const result = await handleregister(form);
+      setFormSuccess(result.message || 'Check your email for a verification link.');
+    } catch (err) {
+      setFormError(
+        err.response?.status === 409
+          ? 'An account with this email or username already exists. Please log in or use different details.'
+          : err.response?.data?.message || 'Registration failed. Please try again.'
+      );
+    }
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-zinc-950 via-neutral-950 to-red-950 p-6 text-white">
-      <form onSubmit={handleSubmit} className="w-full max-w-md space-y-5 rounded-2xl border border-red-900/40 bg-zinc-950/80 p-8 shadow-2xl shadow-red-950/40">
+    <main className="flex min-h-screen items-center justify-center bg-zinc-950 p-6 text-white">
+      <form onSubmit={handleSubmit} className="w-full max-w-md space-y-5 rounded-2xl border border-[#31b8c6]/40 bg-zinc-950/80 p-8 shadow-2xl shadow-[#31b8c6]/20">
         <h1 className="text-3xl font-bold">Create your account</h1>
         <p className="text-zinc-400">Get started by registering.</p>
+        {formError && <p role="alert" className="text-sm text-red-400">{formError}</p>}
+        {formSuccess && <p role="status" className="text-sm text-emerald-400">{formSuccess}</p>}
 
         <label className="block space-y-2 text-sm">
           Username
           <input
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none focus:border-red-500"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none focus:border-[#31b8c6]"
             type="text" name="username" value={form.username}
             onChange={handleChange} autoComplete="username" required
           />
@@ -30,7 +50,7 @@ export default function Register() {
         <label className="block space-y-2 text-sm">
           Email
           <input
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none focus:border-red-500"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none focus:border-[#31b8c6]"
             type="email" name="email" value={form.email}
             onChange={handleChange} autoComplete="email" required
           />
@@ -39,17 +59,18 @@ export default function Register() {
         <label className="block space-y-2 text-sm">
           Password
           <input
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none focus:border-red-500"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 outline-none focus:border-[#31b8c6]"
             type="password" name="password" value={form.password}
             onChange={handleChange} autoComplete="new-password" required
           />
         </label>
 
-        <button className="w-full rounded-lg bg-gradient-to-r from-red-700 to-rose-500 px-4 py-3 font-semibold hover:brightness-110" type="submit">
+        <button className="w-full rounded-lg bg-[#31b8c6] px-4 py-3 font-semibold text-zinc-950 hover:brightness-110" type="submit">
           Register
         </button>
         <p className="text-center text-sm text-zinc-400">
-          Already registered? <a className="text-rose-400 hover:text-rose-300" href="/login">Sign in</a>
+
+          Already registered?  <Link to="/login" className="text-[#31b8c6] hover:brightness-125">Log In</Link>
         </p>
       </form>
     </main>
